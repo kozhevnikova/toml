@@ -1,8 +1,35 @@
-# TOML parser and encoder library for Golang [![Build Status](https://travis-ci.org/naoina/toml.png?branch=master)](https://travis-ci.org/naoina/toml)
+# TOML Parser and Encoder Library for Go
 
-[TOML](https://github.com/toml-lang/toml) parser and encoder library for [Golang](http://golang.org/).
+[![Build Status](https://travis-ci.org/naoina/toml.png?branch=master)](https://travis-ci.org/naoina/toml)
+
+A [TOML](https://github.com/toml-lang/toml) parser and encoder library for [Go](http://golang.org/). 
 
 This library is compatible with TOML version [v0.4.0](https://github.com/toml-lang/toml/blob/master/versions/en/toml-v0.4.0.md).
+
+See [API documentation](http://godoc.org/github.com/naoina/toml).
+
+## Table of Contents
+
+- [Installation](#installation)
+- [Usage](#usage)
+- [Mappings](#mappings)
+  - [Rules](#rules)
+    - [Exact matching](#exact-matching)
+    - [Camelcase matching](#camelcase-matching)
+    - [Uppercase matching](#uppercase-matching)      
+  - [Value](#value)
+    - [String](#string)
+    - [Integer](#integer)
+    - [Float](#float)
+    - [Boolean](#boolean)
+    - [Datetime](#datetime)
+    - [Array](#array)
+    - [Table](#table)
+    - [Array of Tables](#array-of-tables)
+ - [Using encoding.TextUnmarshaler Interface](#using-encodingtextunmarshaler-interface)
+ - [Using toml.UnmarshalerRec Interface](#using-tomlunmarshalerrec-interface)
+ - [Using toml.Unmarshaler Interface](#using-tomlunmarshaler-interface)
+ - [License](#license)
 
 ## Installation
 
@@ -10,16 +37,12 @@ This library is compatible with TOML version [v0.4.0](https://github.com/toml-la
 
 ## Usage
 
-The following TOML save as `example.toml`.
+Save the following TOML example as `config.toml`:
 
 ```toml
-# This is a TOML document. Boom.
-
-title = "TOML Example"
-
 [owner]
 name = "Lance Uppercut"
-dob = 1979-05-27T07:32:00-08:00 # First class dates? Why not?
+birthday = 1979-05-27
 
 [database]
 server = "192.168.1.1"
@@ -29,85 +52,121 @@ enabled = true
 
 [servers]
 
-  # You can indent as you please. Tabs or spaces. TOML don't care.
-  [servers.alpha]
-  ip = "10.0.0.1"
-  dc = "eqdc10"
+    [servers.alpha]
+    ip = "10.0.0.1"
+    dc = "eqdc10"
 
-  [servers.beta]
-  ip = "10.0.0.2"
-  dc = "eqdc10"
+    [servers.beta]
+    ip = "10.0.0.2"
+    dc = "eqdc10"
 
 [clients]
 data = [ ["gamma", "delta"], [1, 2] ]
-
-# Line breaks are OK when inside arrays
 hosts = [
   "alpha",
   "omega"
 ]
 ```
-
-Then above TOML will mapping to `tomlConfig` struct using `toml.Unmarshal`.
+Then, use the following Go code to map the preceding TOML to a `config` object.
 
 ```go
 package main
 
 import (
-    "os"
-    "time"
+	"fmt"
+	"log"
+	"net"
+	"os"
+	"time"
 
-    "github.com/naoina/toml"
+	"github.com/naoina/toml"
 )
 
 type tomlConfig struct {
-    Title string
-    Owner struct {
-        Name string
-        Dob  time.Time
-    }
-    Database struct {
-        Server        string
-        Ports         []int
-        ConnectionMax uint
-        Enabled       bool
-    }
-    Servers map[string]ServerInfo
-    Clients struct {
-        Data  [][]interface{}
-        Hosts []string
-    }
+	Owner struct {
+		Name     string
+		Birthday time.Time
+	}
+
+	Database struct {
+		Server        string
+		Ports         []int
+		ConnectionMax uint
+		Enabled       bool
+	}
+
+	Servers map[string]ServerInfo
+
+	Clients struct {
+		Data  [][]interface{}
+		Hosts []string
+	}
 }
 
 type ServerInfo struct {
-    IP net.IP
-    DC string
+	IP net.IP
+	DC string
 }
 
 func main() {
-    f, err := os.Open("example.toml")
-    if err != nil {
-        panic(err)
-    }
-    defer f.Close()
-    var config Config
-    if err := toml.NewDecoder(f).Decode(&config); err != nil {
-        panic(err)
-    }
+	file, err := os.Open("config.toml")
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
-    // then to use the unmarshaled config...
-    fmt.Println("IP of server 'alpha':", config.Servers["alpha"].IP)
+	defer file.Close()
+
+	var config tomlConfig
+
+	if err := toml.NewDecoder(file).Decode(&config); err != nil {
+		log.Println(err)
+		return
+	}
+
+	fmt.Println("Owner info. Name:", config.Owner.Name, "Birthday:",
+		config.Owner.Birthday)
+
+	fmt.Println("Database server:", config.Database.Server)
+	fmt.Println("Database port:", config.Database.Ports[0])
+	fmt.Println("Database connection_max:", config.Database.ConnectionMax)
+	fmt.Println("Database enabled:", config.Database.Enabled)
+
+	fmt.Println("IP of server 'alpha':", config.Servers["alpha"].IP)
+	fmt.Println("DC of server 'alpha':", config.Servers["alpha"].DC)
+
+	fmt.Println("IP of server 'beta':", config.Servers["beta"].IP)
+	fmt.Println("DC of server 'beta':", config.Servers["beta"].DC)
+
+	fmt.Println("First Host:", config.Clients.Hosts[0])
 }
+
+```
+Output: 
+
+``` go
+Owner info. Name: Lance Uppercut Birthday: 1979-05-27 00:00:00 +0000 UTC
+Database server: 192.168.1.1
+Database port: 8001 
+Database connection_max: 5000
+Database enabled: true
+IP of server 'alpha': 10.0.0.1
+DC of server 'alpha': eqdc10
+IP of server 'beta': 10.0.0.2   
+DC of server 'beta': eqdc10
+First Host: alpha
 ```
 
 ## Mappings
 
-A key and value of TOML will map to the corresponding field.
-The fields of struct for mapping must be exported.
+A key value pair of TOML maps to the corresponding field.
+The fields of a struct for mapping must be exported.
 
-The rules of the mapping of key are following:
+### Rules 
 
-#### Exact matching
+The rules of the mapping of a key are following:
+
+#### Exact Matching
 
 ```toml
 timeout_seconds = 256
@@ -115,11 +174,11 @@ timeout_seconds = 256
 
 ```go
 type Config struct {
-	Timeout_seconds int
+    Timeout_seconds int
 }
 ```
 
-#### Camelcase matching
+#### Camelcase Matching
 
 ```toml
 server_name = "srv1"
@@ -127,11 +186,11 @@ server_name = "srv1"
 
 ```go
 type Config struct {
-	ServerName string
+    ServerName string
 }
 ```
 
-#### Uppercase matching
+#### Uppercase Matching
 
 ```toml
 ip = "10.0.0.1"
@@ -139,13 +198,14 @@ ip = "10.0.0.1"
 
 ```go
 type Config struct {
-	IP string
+    IP string
 }
 ```
+### Value 
 
-See the following examples for the value mappings.
+See the following examples how to map different types of values:
 
-### String
+#### String
 
 ```toml
 val = "string"
@@ -153,11 +213,11 @@ val = "string"
 
 ```go
 type Config struct {
-	Val string
+    Val string
 }
 ```
 
-### Integer
+#### Integer
 
 ```toml
 val = 100
@@ -165,11 +225,11 @@ val = 100
 
 ```go
 type Config struct {
-	Val int
+    Val int
 }
 ```
 
-All types that can be used are following:
+Types that can be used:
 
 * int8 (from `-128` to `127`)
 * int16 (from `-32768` to `32767`)
@@ -182,7 +242,7 @@ All types that can be used are following:
 * uint64 (from `0` to `18446744073709551615`)
 * uint (same as `uint` on 32bit environment, or `uint64` on 64bit environment)
 
-### Float
+#### Float
 
 ```toml
 val = 3.1415
@@ -190,16 +250,16 @@ val = 3.1415
 
 ```go
 type Config struct {
-	Val float32
+    Val float32
 }
 ```
 
-All types that can be used are following:
+Types that can be used:
 
 * float32
 * float64
 
-### Boolean
+#### Boolean
 
 ```toml
 val = true
@@ -207,11 +267,11 @@ val = true
 
 ```go
 type Config struct {
-	Val bool
+    Val bool
 }
 ```
 
-### Datetime
+#### Datetime
 
 ```toml
 val = 2014-09-28T21:27:39Z
@@ -219,11 +279,11 @@ val = 2014-09-28T21:27:39Z
 
 ```go
 type Config struct {
-	Val time.Time
+    Val time.Time
 }
 ```
 
-### Array
+#### Array
 
 ```toml
 val = ["a", "b", "c"]
@@ -231,11 +291,11 @@ val = ["a", "b", "c"]
 
 ```go
 type Config struct {
-	Val []string
+    Val []string
 }
 ```
 
-Also following examples all can be mapped:
+The following examples also can be mapped:
 
 ```toml
 val1 = [1, 2, 3]
@@ -246,14 +306,14 @@ val4 = [[1, 2, 3], [["a", "b"], [true, false]]]
 
 ```go
 type Config struct {
-	Val1 []int
-	Val2 [][]string
-	Val3 [][]interface{}
-	Val4 [][]interface{}
+    Val1 []int
+    Val2 [][]string
+    Val3 [][]interface{}
+    Val4 [][]interface{}
 }
 ```
 
-### Table
+#### Table
 
 ```toml
 [server]
@@ -268,11 +328,11 @@ type = "app"
 
 ```go
 type Config struct {
-	Server map[string]Server
+    Server map[string]Server
 }
 
 type Server struct {
-	IP string
+    IP string
 }
 ```
 
@@ -280,18 +340,18 @@ You can also use the following struct instead of map of struct.
 
 ```go
 type Config struct {
-	Server struct {
-		Development Server
-		Production Server
-	}
+    Server struct {
+        Development Server
+	Production Server
+    }
 }
 
 type Server struct {
-	IP string
+    IP string
 }
 ```
 
-### Array of Tables
+#### Array of Tables
 
 ```toml
 [[fruit]]
@@ -316,22 +376,22 @@ type Server struct {
 
 ```go
 type Config struct {
-	Fruit []struct {
-		Name string
-		Physical struct {
-			Color string
-			Shape string
-		}
-		Variety []struct {
-			Name string
-		}
+    Fruit []struct {
+        Name string
+	Physical struct {
+	    Color string
+	    Shape string
 	}
+	Variety []struct {
+	    Name string
+	}
+    }
 }
 ```
 
-### Using the `encoding.TextUnmarshaler` interface
+### Using `encoding.TextUnmarshaler` Interface
 
-Package toml supports `encoding.TextUnmarshaler` (and `encoding.TextMarshaler`). You can
+The package toml supports `encoding.TextUnmarshaler` (and `encoding.TextMarshaler`). You can
 use it to apply custom marshaling rules for certain types. The `UnmarshalText` method is
 called with the value text found in the TOML input. TOML strings are passed unquoted.
 
@@ -350,6 +410,7 @@ func (d *Duration) UnmarshalText(data []byte) error {
     if err == nil {
         *d = Duration(duration)
     }
+    
     return err
 }
 
@@ -362,11 +423,11 @@ type ConfigWithDuration struct {
     Duration Duration
 }
 ```
-### Using the `toml.UnmarshalerRec` interface
+### Using `toml.UnmarshalerRec` Interface
 
 You can also override marshaling rules specifically for TOML using the `UnmarshalerRec`
 and `MarshalerRec` interfaces. These are useful if you want to control how structs or
-arrays are handled. You can apply additional validation or set unexported struct fields.
+arrays are handled. You can apply an additional validation or set unexported struct fields.
 
 Note: `encoding.TextUnmarshaler` and `encoding.TextMarshaler` should be preferred for
 simple (scalar) values because they're also compatible with other formats like JSON or
@@ -374,17 +435,13 @@ YAML.
 
 [See the UnmarshalerRec example](https://godoc.org/github.com/naoina/toml/#example_UnmarshalerRec).
 
-### Using the `toml.Unmarshaler` interface
+### Using `toml.Unmarshaler` Interface
 
 If you want to deal with raw TOML syntax, use the `Unmarshaler` and `Marshaler`
 interfaces. Their input and output is raw TOML syntax. As such, these interfaces are
 useful if you want to handle TOML at the syntax level.
 
 [See the Unmarshaler example](https://godoc.org/github.com/naoina/toml/#example_Unmarshaler).
-
-## API documentation
-
-See [Godoc](http://godoc.org/github.com/naoina/toml).
 
 ## License
 
