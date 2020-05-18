@@ -1,4 +1,4 @@
-# TOML Parser and Encoder Library for Go
+# A TOML Parser and Encoder Library for Go
 
 [![Build Status](https://travis-ci.org/naoina/toml.png?branch=master)](https://travis-ci.org/naoina/toml)
 
